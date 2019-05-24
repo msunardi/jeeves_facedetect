@@ -14,7 +14,7 @@ import numpy as np
 # import cv2
 import threading
 # import rospy
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from sensor_msgs.msg import CompressedImage, Image
 
 __author__ =  'Simon Haller <simon.haller at uibk.ac.at>'
@@ -51,6 +51,9 @@ from cv_bridge import CvBridge, CvBridgeError
 class FaceDetect(threading.Thread):
     def __init__(self, cascade, nested):
         self.image_pub = rospy.Publisher("/output/image_raw/compressed", Image, queue_size=1)
+        self.position_pub = rospy.Publisher("/output/position", String, queue_size=1)
+        self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
+        self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float32, queue_size=1)
         # subscribed Topic
         self.subscriber = rospy.Subscriber("/usb_cam/image_raw/compressed",
             CompressedImage, self.callback, queue_size=1)
@@ -91,6 +94,17 @@ class FaceDetect(threading.Thread):
         # draw_str(vis, (20, 20), 'time: %.1f ms' % (dt*1000))
         # cv2.imshow('facedetect', vis)
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(vis, "bgr8"))
+        # rospy.loginfo(type(rects))
+        if isinstance(rects, np.ndarray):
+            rospy.loginfo(rects[0])
+            rect = rects[0]
+            width = 640
+            height = 480
+            facex = rect[0] + (rect[2] - rect[0])/2.0 - width/2.0
+            facey = rect[1] + (rect[3] - rect[1])/2.0 - height/2.0
+            self.position_pub.publish("x: {}, y: {}".format(facex, facey))
+            self.yaw_pub.publish(facex)
+            self.pitch_pub.publish(facey)
         # #### Create CompressedIamge ####
         # msg = Image()
         # msg.header.stamp = rospy.Time.now()
@@ -157,7 +171,7 @@ def main(args):
     cascade = cv2.CascadeClassifier(cascade_fn)
     nested = cv2.CascadeClassifier(nested_fn)
 
-    # cam = create_capture(video_src, fallback='synth:bg=../data/lena.jpg:noise=0.05')
+    cam = create_capture(video_src, fallback='synth:bg=../data/lena.jpg:noise=0.05')
 
     fd = FaceDetect(cascade, nested)
     fd.start()

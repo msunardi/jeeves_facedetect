@@ -55,8 +55,10 @@ class FaceDetect(threading.Thread):
         self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
         self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float32, queue_size=1)
         # subscribed Topic
-        self.subscriber = rospy.Subscriber("/usb_cam/image_raw/compressed",
-            CompressedImage, self.callback, queue_size=1)
+        #self.subscriber = rospy.Subscriber("/usb_cam/image_raw/compressed",
+        #   CompressedImage, self.callback, queue_size=1)
+        self.subscriber = rospy.Subscriber("/usb_cam/image_raw",
+            Image, self.callback, queue_size=1)
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
 
@@ -69,13 +71,18 @@ class FaceDetect(threading.Thread):
         self.sleeper = rospy.Rate(10)
 
     def callback(self, data):
-        # img = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        #img = self.bridge.imgmsg_to_cv2(data.data, "bgr8")
         # img = data.data
-        np_arr = np.fromstring(data.data, np.uint8)
-        img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        #np_arr = np.fromstring(data.data, np.uint8)
+        #mg = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         # img = self.bridge.imgmsg_to_cv2(img, "bgr8")
         # img = np.array(data.data)
         # gray = cv2.imread(img, 0)
+        try:
+            img = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        except CvBridgeError as e:
+            print( e)
+
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
 

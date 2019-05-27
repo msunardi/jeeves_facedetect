@@ -22,6 +22,8 @@ __version__=  '0.1'
 __license__ = 'BSD'
 # Python libs
 import sys, time
+from math import *
+import random
 
 # numpy and scipy
 from scipy.ndimage import filters
@@ -53,7 +55,9 @@ class FaceDetect(threading.Thread):
         self.image_pub = rospy.Publisher("/output/image_raw/compressed", Image, queue_size=1)
         self.position_pub = rospy.Publisher("/output/position", String, queue_size=1)
         self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
-        self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float32, queue_size=1)
+        self.pitch_pub = rospy.Publisher("/head/pitch", Float32, queue_size=1)
+        self.eye_yaw_pub = rospy.Publisher("/eye/yaw", Float32, queue_size=1)
+        self.eye_pitch_pub = rospy.Publisher("/eye/pitch", Float32, queue_size=1)
         # subscribed Topic
         #self.subscriber = rospy.Subscriber("/usb_cam/image_raw/compressed",
         #   CompressedImage, self.callback, queue_size=1)
@@ -105,13 +109,24 @@ class FaceDetect(threading.Thread):
         if isinstance(rects, np.ndarray):
             rospy.loginfo(rects[0])
             rect = rects[0]
-            width = 640
-            height = 480
-            facex = rect[0] + (rect[2] - rect[0])/2.0 - width/2.0
-            facey = rect[1] + (rect[3] - rect[1])/2.0 - height/2.0
-            self.position_pub.publish("x: {}, y: {}".format(facex, facey))
-            self.yaw_pub.publish(facex)
-            self.pitch_pub.publish(facey)
+            width = 480 #640
+            height = 320 #480
+
+            # find facebox horizontal offset from center
+            facex = rect[0] + (rect[2] - rect[0])/2.0
+            eyes_yaw = self.normalize_eye_yaw(width - facex, width) # x axis of eyes is inverted
+            facex_center = facex - width/2.0
+            # find facebox vertical offset from center
+            facey = rect[1] + (rect[3] - rect[1])/2.0
+            eyes_pitch = self.normalize_eye_pitch(facey, height)
+            facey_center = -facey + height/2.0
+
+            self.position_pub.publish("x: {}, y: {}".format(facex_center, facey_center))
+            self.yaw_pub.publish(facex_center)
+            self.pitch_pub.publish(facey_center)
+            self.position_pub.publish("eye_x: {}, eye_y: {}".format(eyes_yaw, eyes_pitch))
+            self.eye_yaw_pub.publish(eyes_yaw)
+            self.eye_pitch_pub.publish(eyes_pitch)
         # #### Create CompressedIamge ####
         # msg = Image()
         # msg.header.stamp = rospy.Time.now()
@@ -119,6 +134,21 @@ class FaceDetect(threading.Thread):
         # msg.data = np.array(cv2.imencode('.jpg', vis)[1]).tostring()
         # # Publish new image
         # self.image_pub.publish(msg)
+
+    def normalize_eye_pitch(self, value, ref):
+        # Normalize values for eye position
+        # must consider camera placement and adjust pitch value
+        segments = 6
+        segment_size = float(ref)/segments
+        out = value/segment_size
+        return max(min(ceil(out), 5), 3)
+
+    def normalize_eye_yaw(self, value, ref):
+        # Normalize values for eye position
+        segments = 6
+        segment_size = float(ref)/segments
+        out = value/segment_size
+        return max(min(ceil(out), 4), 2)
 
     def detect(self, img, cascade):
         rects = cascade.detectMultiScale(img, scaleFactor=1.3, minNeighbors=4, minSize=(30, 30),

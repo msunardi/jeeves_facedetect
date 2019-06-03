@@ -14,7 +14,7 @@ import numpy as np
 # import cv2
 import threading
 # import rospy
-from std_msgs.msg import String, Float32
+from std_msgs.msg import String, Float32, Float64
 from sensor_msgs.msg import CompressedImage, Image
 
 __author__ =  'Simon Haller <simon.haller at uibk.ac.at>'
@@ -27,7 +27,7 @@ import random
 
 # numpy and scipy
 from scipy.ndimage import filters
-
+from scipy.stats import norm
 # OpenCV
 import cv2
 
@@ -54,8 +54,9 @@ class FaceDetect(threading.Thread):
     def __init__(self, cascade, nested):
         self.image_pub = rospy.Publisher("/output/image_raw/compressed", Image, queue_size=1)
         self.position_pub = rospy.Publisher("/output/position", String, queue_size=1)
-        self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
-        self.pitch_pub = rospy.Publisher("/head/pitch", Float32, queue_size=1)
+        #self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
+        self.yaw_pub = rospy.Publisher("/head_pan_joint/command", Float64, queue_size=1)
+        self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float32, queue_size=1)
         self.eye_yaw_pub = rospy.Publisher("/eye/yaw", Float32, queue_size=1)
         self.eye_pitch_pub = rospy.Publisher("/eye/pitch", Float32, queue_size=1)
         # subscribed Topic
@@ -63,6 +64,7 @@ class FaceDetect(threading.Thread):
         #   CompressedImage, self.callback, queue_size=1)
         self.subscriber = rospy.Subscriber("/usb_cam/image_raw",
             Image, self.callback, queue_size=1)
+        
         if VERBOSE :
             print("subscribed to /camera/image/compressed")
 
@@ -107,23 +109,24 @@ class FaceDetect(threading.Thread):
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(vis, "bgr8"))
         # rospy.loginfo(type(rects))
         if isinstance(rects, np.ndarray):
-            rospy.loginfo(rects[0])
+            rospy.loginfo("{}".format(rects))
             rect = rects[0]
-            width = 480 #640
+            width = 480
             height = 320 #480
 
             # find facebox horizontal offset from center
             facex = rect[0] + (rect[2] - rect[0])/2.0
             eyes_yaw = self.normalize_eye_yaw(width - facex, width) # x axis of eyes is inverted
-            facex_center = facex - width/2.0
+            #facex_center = facex - width/2.0
+            facex_center = self.normalize_head_yaw(rect, width)
             # find facebox vertical offset from center
             facey = rect[1] + (rect[3] - rect[1])/2.0
             eyes_pitch = self.normalize_eye_pitch(facey, height)
-            facey_center = -facey + height/2.0
+            #facey_center = -facey + height/2.0
 
-            self.position_pub.publish("x: {}, y: {}".format(facex_center, facey_center))
-            self.yaw_pub.publish(facex_center)
-            self.pitch_pub.publish(facey_center)
+            #self.position_pub.publish("x: {}, y: {}".format(facex_center, facey_center))
+            self.yaw_pub.publish(Float64(facex_center))
+            #self.pitch_pub.publish(facey_center)
             self.position_pub.publish("eye_x: {}, eye_y: {}".format(eyes_yaw, eyes_pitch))
             self.eye_yaw_pub.publish(eyes_yaw)
             self.eye_pitch_pub.publish(eyes_pitch)
@@ -134,6 +137,23 @@ class FaceDetect(threading.Thread):
         # msg.data = np.array(cv2.imencode('.jpg', vis)[1]).tostring()
         # # Publish new image
         # self.image_pub.publish(msg)
+
+    def normalize_head_yaw(self, rect, ref):
+        r0 = rect[0]
+        r2 = rect[2]
+        x_center = ref/2
+        rx = (r2 + r0)/2.0 # Horizontal center of rect
+        
+        # Use normal distribution to control activation of neck movements (-5 - +5)
+        # How much to move
+        x = (rx - x_center)/x_center * 5.0
+        # How much activation for the move
+        p = 0.4 - norm.pdf(x)
+        pos = p * x * 1.5 # 5.0/2
+        rospy.loginfo("x/p/pos: {}/{}/{}".format(x, p, pos))
+        return pos
+
+    # def normalize_head_pitch(self, rect, ref):
 
     def normalize_eye_pitch(self, value, ref):
         # Normalize values for eye position

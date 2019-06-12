@@ -50,9 +50,12 @@ path = rospack.get_path('facedetectpy')
 
 from cv_bridge import CvBridge, CvBridgeError
 
+IMG_WIDTH=640
+IMG_HEIGHT=480
+
 class FaceDetect(threading.Thread):
     def __init__(self, cascade, nested):
-        self.image_pub = rospy.Publisher("/output/image_raw/compressed", Image, queue_size=1)
+        self.image_pub = rospy.Publisher("/output/image_raw", Image, queue_size=1)
         self.position_pub = rospy.Publisher("/output/position", String, queue_size=1)
         #self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
         self.yaw_pub = rospy.Publisher("/head_pan_joint/command", Float64, queue_size=1)
@@ -77,17 +80,17 @@ class FaceDetect(threading.Thread):
         self.sleeper = rospy.Rate(10)
 
     def callback(self, data):
-        #img = self.bridge.imgmsg_to_cv2(data.data, "bgr8")
+        img = self.bridge.imgmsg_to_cv2(data, "bgr8")
         # img = data.data
         #np_arr = np.fromstring(data.data, np.uint8)
-        #mg = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        #img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         # img = self.bridge.imgmsg_to_cv2(img, "bgr8")
         # img = np.array(data.data)
         # gray = cv2.imread(img, 0)
-        try:
-            img = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print( e)
+        #try:
+        #    img = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        #except CvBridgeError as e:
+        #    print( e)
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = cv2.equalizeHist(gray)
@@ -111,8 +114,8 @@ class FaceDetect(threading.Thread):
         if isinstance(rects, np.ndarray):
             rospy.loginfo("{}".format(rects))
             rect = rects[0]
-            width = 480
-            height = 320 #480
+            width = IMG_WIDTH
+            height = IMG_HEIGHT
 
             # find facebox horizontal offset from center
             facex = rect[0] + (rect[2] - rect[0])/2.0
@@ -161,14 +164,14 @@ class FaceDetect(threading.Thread):
         segments = 6
         segment_size = float(ref)/segments
         out = value/segment_size
-        return max(min(ceil(out), 5), 3)
+        return max(min(ceil(out), 5.0), 3.0)
 
     def normalize_eye_yaw(self, value, ref):
         # Normalize values for eye position
         segments = 6
         segment_size = float(ref)/segments
         out = value/segment_size
-        return max(min(ceil(out), 4), 2)
+        return max(min(ceil(out), 4.0), 2.0)
 
     def detect(self, img, cascade):
         rects = cascade.detectMultiScale(img, scaleFactor=1.3, minNeighbors=4, minSize=(30, 30),
@@ -228,7 +231,7 @@ def main(args):
     cascade = cv2.CascadeClassifier(cascade_fn)
     nested = cv2.CascadeClassifier(nested_fn)
 
-    cam = create_capture(video_src, fallback='synth:bg=../data/lena.jpg:noise=0.05')
+    #cam = create_capture(video_src, fallback='synth:bg=../data/lena.jpg:noise=0.05')
 
     fd = FaceDetect(cascade, nested)
     fd.start()

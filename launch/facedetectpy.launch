@@ -1,0 +1,4 @@
+<launch>
+	<include file="camera.launch" />
+	<node name="facedetect" pkg="facedetectpy" type="facedetectpy.py" required="true" output="screen" />
+</launch>

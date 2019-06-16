@@ -55,11 +55,11 @@ IMG_HEIGHT=480
 
 class FaceDetect(threading.Thread):
     def __init__(self, cascade, nested):
-        self.image_pub = rospy.Publisher("/output/image_raw", Image, queue_size=1)
+        self.image_pub = rospy.Publisher("/output/image_raw", Image, queue_size=10)
         self.position_pub = rospy.Publisher("/output/position", String, queue_size=1)
-        #self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float32, queue_size=1)
-        self.yaw_pub = rospy.Publisher("/head_pan_joint/command", Float64, queue_size=1)
-        self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float32, queue_size=1)
+        self.yaw_pub = rospy.Publisher("/head/cmd_pose_yaw", Float64, queue_size=1)
+        #self.yaw_pub = rospy.Publisher("/head_pan_joint/command", Float64, queue_size=1)
+        self.pitch_pub = rospy.Publisher("/head/cmd_pose_pitch", Float64, queue_size=1)
         self.eye_yaw_pub = rospy.Publisher("/eye/yaw", Float32, queue_size=1)
         self.eye_pitch_pub = rospy.Publisher("/eye/pitch", Float32, queue_size=1)
         # subscribed Topic
@@ -128,7 +128,8 @@ class FaceDetect(threading.Thread):
             #facey_center = -facey + height/2.0
 
             #self.position_pub.publish("x: {}, y: {}".format(facex_center, facey_center))
-            self.yaw_pub.publish(Float64(facex_center))
+            if abs(facex_center) > 0.8:
+                self.yaw_pub.publish(Float64(facex_center))
             #self.pitch_pub.publish(facey_center)
             self.position_pub.publish("eye_x: {}, eye_y: {}".format(eyes_yaw, eyes_pitch))
             self.eye_yaw_pub.publish(eyes_yaw)
@@ -152,7 +153,7 @@ class FaceDetect(threading.Thread):
         x = (rx - x_center)/x_center * 5.0
         # How much activation for the move
         p = 0.4 - norm.pdf(x)
-        pos = p * x * 1.5 # 5.0/2
+        pos = -1.0 * p * x * 1.5 # 5.0/2
         rospy.loginfo("x/p/pos: {}/{}/{}".format(x, p, pos))
         return pos
 
